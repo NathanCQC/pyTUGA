@@ -2,6 +2,9 @@ from re import A
 import numpy as np
 import pandas as pd
 from sympy import *
+from scipy.special import binom
+import sys 
+sys.setrecursionlimit(10**8)
 
 class ShavittGraph():
     """ Generates the Distinct row table for Shavitt GUGA graph
@@ -14,16 +17,31 @@ class ShavittGraph():
         self._abc_node_dict = self._get_node_dict()
         self._ki_dict = self._get_downward_chaining_indices()
         self._li_dict = self._get_upward_chaining_indices()
+        self._nnode = list(self._abc_node_dict.values())[-1]
+        self._distinct_row_table = self._get_distinct_row_table()
+        self._csf_list = []
+        self._n_csfs = None
+
+    def abc_dim(self):
+
+        abc = np.array(self._abc_final)
+        n = abc.sum()
+        a = abc[0]
+        b = abc[1]
+        c = abc[2]
+        dim = (b+1)/(n+1)* binom(n+1,a)* binom(n+1,c)
+        return int(dim)
 
 
     class CSF(): 
 
-        def __init__(self,index) -> None:
+        def __init__(self,idstat, jstat, index) -> None:
             self.index = index
-            self.arc = None
-            self.arcs_top = None
-
-            pass
+            self.idstat = idstat.tolist()
+            self.jstat = jstat.tolist()
+            self.nspatorbs = len(self.idstat)
+            self.arcs_upper = {j: d for j, d in zip(self.jstat[1:], self.idstat)}
+            self.arcs_lower = {j: d for j, d in zip(self.jstat[0:self.nspatorbs], self.idstat)}
 
     def _get_node_dict(self) -> dict:
 
@@ -123,9 +141,8 @@ class ShavittGraph():
         return li_dict
 
 
-
-    @property
-    def distinct_row_table(self):
+    
+    def _get_distinct_row_table(self): 
 
         uirrep = []
         for u in reversed(range(self._nspatorbs+1)):
@@ -154,37 +171,61 @@ class ShavittGraph():
 
         return pd.DataFrame(data,index=nodes).rename_axis('j')
 
+    @property
+    def distinct_row_table(self):
+        return self._distinct_row_table 
+
     def _get_csfs(self):
 
-        # Do we actually need to ever run this code if we have the nodes and the connectivity from the DRT
-
-        #Things we need
-        # - CSF object for each walk
-        # ibrnch - list stored branching point opn current path at orbtial level N
-        # jstat - list of nodes of csf path
-        # d_vec - walk list
-        # d
-
-        # Lexicographical ordering = 3 - 2 - 1 - 0
-
-        # Do we need to use numpy arrays
-
         jstat = np.zeros(self._nspatorbs + 1, dtype=int) # plus 1 bulshit
-        ibrnch = np.zeros(self._nspatorbs + 1, dtype=int)
+        # ibrnch = np.zeros(self._nspatorbs + 1, dtype=int)
+        ibrnch = [None for i in range (self._nspatorbs)] #[(node, next d)] #records the branching at the progressive levels
         idstat = np.zeros(self._nspatorbs, dtype=int)
+        nstate =1
 
         jstat[0] = self._nnode
 
         nback_to = 0
+        n = 0
 
         ibrnch[nback_to] = jstat[nback_to]
-        # idstat[nback_to] = 1  #first branch direction = 1
-        idstat[nback_to] = 3
-        idirn = 3  #First branching direction 1
 
-        def recurive_walk(n, idirn):  # Does a single step, recurively updates for n+1
+        if self.distinct_row_table['l3'][jstat[0]] is not None:
+            idirn = 3
+            idstat[0] = 3
+            ibrnch[0] = 3
+        elif self.distinct_row_table['l1'][jstat[0]] is not None:
+            idirn = 1 
+            idstat[0] = 1
+            ibrnch[0] = 1
+        elif self.distinct_row_table['l0'][jstat[0]] is not None:
+            idirn = 0
+            idstat[0] = 0
+            ibrnch[0] = None # No branchig here.
+        else:
+            raise(ValueError('inital d error'))
+
+        # Recursive walk Theory CSF
+
+            # 1. input d direction, find next j with drt j3k/j2k/j1k/j0k
+
+            # 2. If you 3 Not None take that or 2 , 1 , 0. Take the nexty lowest d after ibrach (j,d) that is not None
+
+            # 3. If branching possible. More than 2 Not None. Take highest d, ibrnch = (j,d)
+
+            # - How know if there is brnaching and which brnach to take
+
+            # 4. If n equal to norbs repeat
+            # 5. if n orbs =nspinobs for back to j branch and set i dir 0
+            # 5. Go to last branch that was not 0
+            
+            # print('n',n,'idstat',idirn,'jstat',jstat[n])
+
+        def recurive_walk(n, idirn, ibrnch, jstat, nstate):  # Does a single step, recurively updates for n+1
+            # Needed to populate the 
             n = n + 1  # Next level from previous brnaching point
             idstat[n - 1] = idirn
+
             # if (idirn == 1):
             #     jstat[n] = self.distinct_row_table['j1k'][jstat[n - 1]]
             # else:
@@ -201,120 +242,52 @@ class ShavittGraph():
             else:
                 raise(ValueError('d error'))
 
-            #branching decide direction of next step
-            # This needs more complex logic now that we have 4 step diretcion
-            if ((self.distinct_row_table['j1k'][jstat[n]] != 0) and (self.distinct_row_table['j0k'][jstat[n]] != 0)):
-                ibrnch[n] = jstat[n]
-                idirn = 1
 
-            if all(v is not None for v in [A, B, C, D, E])
+            def next_branch_d(ibrnch, n): 
 
-            branches = [self.distinct_row_table['l3'][jstat[n]],self.distinct_row_table['l2'][jstat[n]],self.distinct_row_table['l1'][jstat[n]],self.distinct_row_table['l0'][jstat[n]]]
+                branches = [self.distinct_row_table['l0'][jstat[n]],self.distinct_row_table['l1'][jstat[n]],self.distinct_row_table['l2'][jstat[n]],self.distinct_row_table['l3'][jstat[n]]]
 
-            
+                if ibrnch[n] == (None or False):
+                    ibrnch[n] = 4 #Hacky
+                for d, ld in reversed(list(enumerate(branches[0:ibrnch[n]]))):
+                    if ld != 'None':
+                        if d != 0:
+                            for d1, ld1 in reversed(list(enumerate(branches[0:d]))):
+                                if ld1 != 'None': # this checks for not None
+                                    ibrnch[n] = d
+                                    idirn = d
+                                    return ibrnch,idirn
+                                else:
+                                    ibrnch[n] = False
+                            idirn = d
+                            return ibrnch,idirn
+                        else:
+                            ibrnch[n] = False
+                        idirn = d
+                        return ibrnch,idirn
+                    # else: # THIS IS POSSIBLY BUGGY
+                    #     raise ValueError('invalid branching direction')
 
-            #NO BRANCHING
-            else:
-                ibrnch[n] = 0
-                if (self.distinct_row_table['j1k'][jstat[n]] != 0):
-                    idirn = 1
-                else:
-                    idirn = 0
-
-            if (n != self._nspinorbs):
-                return recurive_walk(n, idirn)
+            if (n != self._nspatorbs):
+                ibrnch, idirn = next_branch_d(ibrnch,n)
+                return recurive_walk(n, idirn,ibrnch, jstat, nstate)
             else:  # rewind to the last brnach step
-                for nback in range(self._nspinorbs - 1, nback_to - 1, -1):
-                    if (ibrnch[nback] != 0):
-                        ibrnch[nback] = 0  #Correctly updates the ibrach
-                        idirn = 0  #Step direction changes only when ibrnch[nback]!=0
+                csf = self.CSF(idstat,jstat,nstate)
+                self._csf_list.append(csf)
+                for nback in range(self._nspatorbs - 1, nback_to - 1, -1): #This is going all the way back to 0 when it shouldt really. Should go to last branch. Seems ot work aslong as put to 0
+                    if (ibrnch[nback] != False):
+                        idirn = ibrnch[nback]   #Step direction changes only when ibrnch[nback]!=0
                         n = nback
-                        # nstate=nstate+1
-                        slater_determinants.append(idstat.tolist()) # Do this in CSF class
-                        slater_determinants_arcs.append([(j, d)for j, d in zip(jstat[:self._nspinorbs].tolist(),idstat.tolist())])
-                        slater_determinants_arcs_top.append([(j, d) for j, d in zip(jstat[1:].tolist(),idstat.tolist())])
-                        return recurive_walk(n, idirn)
-                slater_determinants.append(idstat.tolist())
-                slater_determinants_arcs.append([(j, d) for j, d in zip(jstat[:self._nspinorbs].tolist(), idstat.tolist())])
-                slater_determinants_arcs_top.append([(j, d) for j, d in zip(jstat[1:].tolist(), idstat.tolist()) #this happens in csf object])
-                return slater_determinants, slater_determinants_arcs, slater_determinants_arcs_top
+                        ibrnch, idirn = next_branch_d(ibrnch,n)
+                        nstate=nstate+1
+                        return recurive_walk(n, idirn,ibrnch,jstat,nstate)
+                return #End of function
 
-        slater_determinants, slater_determinants_arcs, slater_determinants_arcs_top = recurive_walk(n, idirn)
+        recurive_walk(n, idirn,ibrnch,jstat,nstate) #Entry point to the function
 
-        return slater_determinants, slater_determinants_arcs, slater_determinants_arcs_top  #return DF here
+        self._nstates = nstate
+
+        return
 
 
-
-    def _get_slater_determiant_paths(self):
-
-        jstat = np.zeros(self._nspinorbs + 1, dtype=int)
-        ibrnch = np.zeros(self._nspinorbs + 1, dtype=int)
-        idstat = np.zeros(self._nspinorbs, dtype=int)
-        slater_determinants = []
-        slater_determinants_arcs = []
-        slater_determinants_arcs_top = []
-
-        jstat[0] = self._nnode
-        nstate = 0
-
-        n = 0  #Base of graph
-        nback_to = n  #branching point at the base
-
-        ibrnch[nback_to] = jstat[nback_to]
-        idstat[nback_to] = 1  #first branch direction = 1
-        idirn = 1  #First branching direction 1
-
-        def recurive_walk(
-                n, idirn):  # Does a single step, recurively updates for n+1
-            n = n + 1  # Next level from previous brnaching point
-            idstat[n - 1] = idirn
-            if (idirn == 1):
-                jstat[n] = self.distinct_row_table['j1k'][jstat[n - 1]]
-            else:
-                jstat[n] = self.distinct_row_table['j0k'][jstat[n - 1]]
-
-            #branching decide direction of next step
-            if ((self.distinct_row_table['j1k'][jstat[n]] != 0)
-                    and (self.distinct_row_table['j0k'][jstat[n]] != 0)):
-                ibrnch[n] = jstat[n]
-                idirn = 1
-
-            #NO BRANCHING
-            else:
-                ibrnch[n] = 0
-                if (self.distinct_row_table['j1k'][jstat[n]] != 0):
-                    idirn = 1
-                else:
-                    idirn = 0
-
-            if (n != self._nspinorbs):
-                return recurive_walk(n, idirn)
-            else:  # rewind to the last brnach step
-                for nback in range(self._nspinorbs - 1, nback_to - 1, -1):
-                    if (ibrnch[nback] != 0):
-                        ibrnch[nback] = 0  #Correctly updates the ibrach
-                        idirn = 0  #Step direction changes only when ibrnch[nback]!=0
-                        n = nback
-                        # nstate=nstate+1
-                        slater_determinants.append(idstat.tolist())
-                        slater_determinants_arcs.append([
-                            (j, d)
-                            for j, d in zip(jstat[:self._nspinorbs].tolist(),
-                                            idstat.tolist())
-                        ])
-                        slater_determinants_arcs_top.append([
-                            (j, d) for j, d in zip(jstat[1:].tolist(),
-                                                   idstat.tolist())
-                        ])
-                        return recurive_walk(n, idirn)
-                slater_determinants.append(idstat.tolist())
-                slater_determinants_arcs.append([(j, d) for j, d in zip(
-                    jstat[:self._nspinorbs].tolist(), idstat.tolist())])
-                slater_determinants_arcs_top.append([
-                    (j, d) for j, d in zip(jstat[1:].tolist(), idstat.tolist()) #this happens in csf object
-                ])
-                return slater_determinants, slater_determinants_arcs, slater_determinants_arcs_top
-
-        slater_determinants, slater_determinants_arcs, slater_determinants_arcs_top = recurive_walk(n, idirn)
-
-        return slater_determinants, slater_determinants_arcs, slater_determinants_arcs_top  #return DF here
+                # slater_determinants_arcs_top.append([(j, d) for j, d in zip(jstat[1:].tolist(), idstat.tolist())])
