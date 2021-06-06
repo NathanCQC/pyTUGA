@@ -1,10 +1,11 @@
 from re import A
 import numpy as np
 import pandas as pd
-from sympy import *
 from scipy.special import binom
 import sys 
 sys.setrecursionlimit(10**8)
+import quimb as qu
+import quimb.tensor as qtn
 
 class ShavittGraph():
     """ Generates the Distinct row table for Shavitt GUGA graph
@@ -288,6 +289,102 @@ class ShavittGraph():
         self._nstates = nstate
 
         return
+
+    def tensor_network_state(self, type):
+        #k are downward chaining indices
+        j_tensors = []
+
+        # Build the node tensors
+        for j in self.distinct_row_table.index.tolist():
+            # tagged [ j , u , uirrep] Maybe this could just be linked to the row of drt.
+            # If ever in doubt just link index j to drt
+            u = self.distinct_row_table['u'][j]
+            u = f'U{u}'
+            uirrep = self.distinct_row_table['uirrep'][j] 
+            uirrep = f'UIRREP{uirrep}'
+
+            j_tensor = qtn.Tensor(tags={f'J{j}{type}',u,uirrep, type.upper()})
+
+            if type == 'bra':
+                j_tensor.new_ind(f'{j}bra', size=4)
+            elif type == 'ket':
+                j_tensor.new_ind(f'{j}ket', size=4)
+            else:
+                raise ValueError('incorrect type keyword must be bra or ket')
+
+            for l in range(4):
+                if self.distinct_row_table[f'l{l}'][j] != 'None':
+                    l_node = self.distinct_row_table[f'l{l}'][j]
+                    j_tensor.new_ind(f'{l_node}_{j}', size=4) 
+
+                
+            for k in range(4):
+                if self.distinct_row_table[f'k{k}'][j] != 'None':
+                    k_node = self.distinct_row_table[f'k{k}'][j]
+                    j_tensor.new_ind(f'{j}_{k_node}', size=4)
+
+
+            j_tensors.append(j_tensor)
+
+        # Build tensor network
+        tensor_network_state = j_tensors[0]
+        for j in j_tensors[1:]:
+            tensor_network_state = j & tensor_network_state
+        
+        if type == 'bra':
+            tensor_network_state = tensor_network_state.H
+
+        return tensor_network_state
+
+    def tensor_network_operator(self): #Need to figure our what goes in the tensor
+        #k are downward chaining indices
+        j_tensors = []
+
+        # Build the node tensors
+        for j in self.distinct_row_table.index.tolist():
+            # tagged [ j , u , uirrep] Maybe this could just be linked to the row of drt.
+            # If ever in doubt just link index j to drt
+            u = self.distinct_row_table['u'][j]
+            u = f'U{u}'
+            uirrep = self.distinct_row_table['uirrep'][j] 
+            uirrep = f'UIRREP{uirrep}'
+
+            j_tensor = qtn.Tensor(tags={f'J{j}',u,uirrep,'OPERATOR'})
+
+            j_tensor.new_ind(f'{j}bra', size=4)
+            j_tensor.new_ind(f'{j}ket', size=4)
+
+            for l in range(4):
+                if self.distinct_row_table[f'l{l}'][j] != 'None':
+                    l_node = self.distinct_row_table[f'l{l}'][j]
+                    j_tensor.new_ind(f'{l_node}_{j}', size=4) 
+                
+            for k in range(4):
+                if self.distinct_row_table[f'k{k}'][j] != 'None':
+                    k_node = self.distinct_row_table[f'k{k}'][j]
+                    j_tensor.new_ind(f'{j}_{k_node}', size=4)
+
+
+            j_tensors.append(j_tensor)
+
+        # Build tensor network
+        tensor_network_operator = j_tensors[0]
+        for j in j_tensors[1:]:
+            tensor_network_operator = j & tensor_network_operator
+
+        return tensor_network_operator
+
+    def tensor_network_expection(self):
+
+        bra = self.tensor_network_state('bra')
+        operator = self.tensor_network_operator()
+        ket = self.tensor_network_state('ket')
+
+        tensor_expectation = bra & operator & ket
+
+        return tensor_expectation
+
+
 
 
                 # slater_determinants_arcs_top.append([(j, d) for j, d in zip(jstat[1:].tolist(), idstat.tolist())])
