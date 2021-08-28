@@ -385,6 +385,7 @@ class ShavittGraph():
         return tensor_expectation
 
 
+# 2 Mai problems
 
-
-                # slater_determinants_arcs_top.append([(j, d) for j, d in zip(jstat[1:].tolist(), idstat.tolist())])
+# If we are going for the full contraction approach I dont know how to contai the integral factors int the operator
+# If we are going to the loop driven contraction this is easy, but require more programming
