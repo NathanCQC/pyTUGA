@@ -1,0 +1,14 @@
+[build-system]
+requires = [
+    "setuptools~=52.0.0",
+    "wheel~=0.36",
+    "cython~=0.29.0",
+    "numpy~=1.20",
+    "setuptools_scm[toml]>=6.0"
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_scheme = 'release-branch-semver'
+write_to = "pyTUGA/version.py"
+git_describe_command = 'git describe --dirty --tags --long --match "*[0-9]*" --abbrev=14'
