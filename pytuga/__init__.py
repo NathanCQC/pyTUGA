@@ -1,1 +1,1 @@
-from guga_graph import ShavittGraph
+from .guga_graph import ShavittGraph, ShavittGraphAB
