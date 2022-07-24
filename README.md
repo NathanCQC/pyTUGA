@@ -1,6 +1,6 @@
 # pyTUGA
 
-This is a python package to calculate quantum chemistry wavefuncntions using a tensor network implementation of the unitary grouyp approach.
+This is a python package to calculate quantum chemistry wavefunctions using a tensor network implementation of the unitary group approach.
 
 Key Features
 - The CI vector is expressed as a product of non linear parameters contained within the tensor network
