@@ -868,21 +868,10 @@ class ShavittGraphAB():
         #k are downward chaining indices
         j_tensors = []
 
-        def elements(params):
-            def matrix_slice(theta):
-                c = do('cos', theta / 2)
-                s = do('sin', theta / 2)
-                d = ((c, -s,), (s, c))
-                return d
-            data = [matrix_slice(i) for i in params]
-            print(data)
-            if len(data) == 1:
-                return do('array', *data)
-            else:
-                return do('array', data)
+
 
         # Build the node tensors
-        for j in self.distinct_row_table.index.tolist():
+        for j in reversed(self.distinct_row_table.index.tolist()):
             # tagged [ j , u , uirrep] Maybe this could just be linked to the row of drt.
             # If ever in doubt just link index j to drt
             u = self.distinct_row_table['u'][j]
@@ -890,60 +879,77 @@ class ShavittGraphAB():
             uirrep = self.distinct_row_table['uirrep'][j]
             uirrep = f'UIRREP{uirrep}'
 
-            # Lower Walks
+            # Upper Walks (Very confusing l is upper)
             inds_l = [] # This is quite sketchky think of better way
-            if j != self.distinct_row_table.index.tolist()[-1]:
+            if j != self.distinct_row_table.index.tolist()[0]:
                 inds_l.append(f'{j}l')
                 for l in [1,2]:
                     if self.distinct_row_table[f'l{l}'][j] != 'None':
+                        print('oij')
                         l_node = self.distinct_row_table[f'l{l}'][j]
-                        # j_tensor.new_ind(f'{l_node}_{j}', size=4)
                         inds_l.append(f'{l_node}_{j}')
-
                 j_l_tensor = qtn.COPY_tensor(2,inds=inds_l) # I thinks this is 4 nodt len(inds_l)-1
 
-            # Upper Walks
+            # Lower Walks
             inds_k = []
-            if j != self.distinct_row_table.index.tolist()[0]:
+            if j != self.distinct_row_table.index.tolist()[-1]:
                 inds_k.append(f'{j}k')
                 for k in [1,2]:
                     if self.distinct_row_table[f'k{k}'][j] != 'None':
                         k_node = self.distinct_row_table[f'k{k}'][j]
                         # j_tensor.new_ind(f'{j}_{k_node}', size=4)
                         inds_k.append(f'{j}_{k_node}')
-
                 j_k_tensor =  qtn.COPY_tensor(2,inds=inds_k)
 
             dim_walk_ind_d = 0 # Must be a better way of doing this.
             for k in [1,2]:
                 if self.distinct_row_table[f'k{k}'][j] != 'None':
                     dim_walk_ind_d += 1 
-            print(dim_walk_ind_d)
 
             #Parameterised tensor
             j_ind = f'{j}'
 
+            def elements(params):
+                def matrix_slice(theta):
+                    c = do('cos', theta / 2)
+                    s = do('sin', theta / 2)
+                    d = ((c, -s,), (s, c))
+                    return d
+                data = [matrix_slice(i) for i in params]
+                return do('array', data)
 
-            angles = [0 for i in range(dim_walk_ind_d)] #This are the initial parameters
-            if inds_k != [] and inds_l != []:
+
+            def elements_row(params): # Do we need a parameter here?, Does it need to be normalised? Like in tensor networks code
+                def matrix_slice(theta):
+                    c = do('cos', theta / 2)
+                    s = do('sin', theta / 2)
+                    d = (c, -s,)
+                    return d
+                data = [matrix_slice(i) for i in params]
+                return do('array', data)
+
+
+             #This are the initial parameters
+            if inds_k != [] and inds_l != []: # Middle nodes
+                print('head')
+                angles = [0,0]
                 d_tensor = qtn.PTensor(elements, angles, inds=[f'{j}l',f'{j}k',j_ind])
                 j_tensor = j_l_tensor & d_tensor & j_k_tensor
-            elif inds_l == []:
-                d_tensor & j_k_tensor
-                d_tensor = qtn.PTensor(elements, angles, inds=[f'{j}k',j_ind])
-            elif inds_k == []:
-                print('debug')
-                print(angles)
-                d_tensor = qtn.PTensor(elements, angles, inds=[f'{j}l',j_ind])
-                print(j_l_tensor)
-                print(d_tensor)
+                # rank 2 array
+            elif inds_l == []: # No upper walks. Head node. head node should be a column. But not sure if this is applicable in tensor networks as long as the indexing is correct
+                # Row vector
+                angles = [0]
+                d_tensor = qtn.PTensor(elements_row, angles, inds=[f'{j}k',j_ind]) # Head node should be a column, BUG IT SEEMS TO BE NOT CONNECTING
+                j_tensor = d_tensor & j_k_tensor
+            elif inds_k == []: # No upper walks. Tail node
+                # column vector
+                angles = [0]
+                d_tensor = qtn.PTensor(elements_row, angles, inds=[f'{j}l',j_ind])
                 j_tensor = j_l_tensor & d_tensor 
             else:
                 raise(ValueError('BUG ALERT'))
 
-            # j_tensor = j_l_tensor & d_tensor & j_k_tensor
-
-            print(j_tensor)
+            print(j,j_tensor)
 
             j_tensors.append(j_tensor)
 
@@ -987,6 +993,13 @@ class ShavittGraphAB():
                     j_tensor.new_ind(f'{j}_{k_node}', size=4)
 
             j_tensors.append(j_tensor)
+
+        # Build tensor network
+        tensor_network_operator = j_tensors[0]
+        for j in j_tensors[1:]:
+            tensor_network_operator = j & tensor_network_operator
+
+        return tensor_network_operator
 
         # Build tensor network
         tensor_network_operator = j_tensors[0]
