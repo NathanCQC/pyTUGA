@@ -3,6 +3,8 @@
     "jupyter.jupyterServerType": "local",
     "autoDocstring.docstringFormat": "sphinx",
     "python.linting.enabled": true,
-    "python.linting.mypyEnabled": true
+    "python.linting.mypyEnabled": true,
+    "python.linting.pylintEnabled": false,
+    "python.analysis.typeCheckingMode": "off"
 }
 
